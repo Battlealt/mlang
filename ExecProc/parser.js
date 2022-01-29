@@ -24,11 +24,15 @@ module.exports = class Parser {
 			}
 		}
 
-		if (this.advance("BOPEN").type != "BCLOSE") {
-			loop();
+		if (this.next.type == "BOPEN") {
+			if (this.advance("BOPEN").type != "BCLOSE") {
+				loop();
+			}
+			
+			this.advance("BCLOSE");
+		} else {
+			body.push(this.primary());
 		}
-		
-		this.advance("BCLOSE");
 		return {
 			type: "BLOCK",
 			body
@@ -99,12 +103,12 @@ module.exports = class Parser {
 		return r;
 	}
 
-	arguments(advance=true) {
+	arguments(advance=true, stopOn="RPAREN") {
 		if (advance) this.advance("LPAREN");
 		let args = [];
 
 		do { // a do while will run at least once
-			if (this.next.type == "RPAREN") break;
+			if (this.next.type == stopOn) break;
 			args.push(this.operation());
 		} while (this.next?.type == "SEPERATOR" && this.advance())
 		if (advance) this.advance("RPAREN");
@@ -151,7 +155,7 @@ module.exports = class Parser {
 	array() {
 		const pos = this.next.position;
 		this.advance("LBRACK");
-		let values = this.arguments(false);
+		let values = this.arguments(false, "RBRACK");
 
 		if (!Array.isArray(values)) values = [values];
 		
@@ -409,6 +413,7 @@ module.exports = class Parser {
 			const right = this.unary();
 
 			left = {
+				type: "OPERATION",
 				operator,
 				left,
 				right

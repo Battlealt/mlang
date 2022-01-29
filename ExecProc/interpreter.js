@@ -286,7 +286,7 @@ module.exports = class Interpreter {
 						position: c.position,
 					};
 				}
-				return c;
+				return this.loop(c);
 			});
 		} else {
 			arg = node.arg != null ? this.loop(node.arg) : node.arg;
@@ -355,15 +355,7 @@ module.exports = class Interpreter {
 				return false;
 			}
 		} else {
-			if (
-				(this.varExists(node?.value) ||
-					node?.value > 0 ||
-					node?.value == true) &&
-				!(
-					node?.value == true ||
-					this.getVar(node?.value, false) == true
-				)
-			) {
+			if ((this.varExists(node?.value) || node?.value) || (node?.value == true || this.getVar(node?.value, false) == true)) {
 				return true;
 			} else {
 				return false;
@@ -387,15 +379,7 @@ module.exports = class Interpreter {
 				return this.start(node?.fail?.body).output[0] || null;
 			}
 		} else {
-			if (
-				(this.varExists(node?.condition?.value) ||
-					node?.condition?.value > 0 ||
-					node?.condition?.value == true) &&
-				!(
-					node?.condition?.value == true ||
-					this.getVar(node?.condition?.value, false) == true
-				)
-			) {
+			if ((this.varExists(node?.condition?.value) || node?.condition) || (node?.condition?.value == true || this.getVar(node?.condition?.value, false) == true)) {
 				return this.start(node?.pass?.body).output[0] || null;
 			} else if (node?.fail?.body != null) {
 				return this.start(node?.fail?.body).output[0] || null;
@@ -414,9 +398,15 @@ module.exports = class Interpreter {
 
 		if (node?.type == "ARRAY") {
 			node.values = node?.values ?? node?.value;
+			let vals;
+			if (typeof node?.values[0] == "undefined") {
+				vals = [];
+			} else {
+				vals = node?.values.map?.((c) => this.loop(c));
+			}
 			return {
 				type: "ARRAY",
-				value: node?.values.map?.((c) => this.loop(c)),
+				value: vals,
 				position: node?.position,
 			};
 		}
@@ -458,7 +448,7 @@ module.exports = class Interpreter {
 		if (node?.type == "IDENTIFIER") {
 			this.pos = node;
 
-			let value = node?.value;
+			let value = node?.name ?? node?.value;
 			if (!this.userFunctions.hasOwnProperty(value)) {
 				value = this.getVar(value, errorOnUndefined);
 			}
@@ -596,11 +586,22 @@ module.exports = class Interpreter {
 				);
 			} else {
 				if (node?.variable?.type == "ARRAY_SELECT") {
-					// throw new Error(
-					// 	`Cannot change value of arrays (${this.fn}:${this.pos?.position?.line}:${this.pos?.position?.cursor})`
-					// );
-					const arrVal = this.loop(node?.variable); // javascript objects / arrays are pointers :)
-					arrVal.value = this.loop(node?.operation).value;
+					const arr = this.getVar(node?.variable?.array?.value); // javascript objects / arrays are pointers :)
+					
+					if (this.loop(node?.operation)?.type == "DELETE") {
+						arr.splice(this.loop(node?.variable?.goto)?.value, 1);
+
+						return null;
+					}
+
+					let append = this.loop(node?.operation) ?? {};
+					append.type = append?.valueType ?? append?.type;
+					
+					if (arr[this.loop(node?.variable?.goto)?.value] != null) {
+						arr[this.loop(node?.variable?.goto)?.value] = append;
+					} else {
+						this.getVar(node?.variable?.array?.value).push(append);
+					}
 					return null;
 				} else if(this.strictMode) {
 					throw new Error(
