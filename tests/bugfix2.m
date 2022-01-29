@@ -1,1 +1,1 @@
-print(-1 => f, c)
+print(-67 => f, c)
